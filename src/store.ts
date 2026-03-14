@@ -40,6 +40,21 @@ function createDefaultProject(): Project {
   }
 }
 
+export function createNewProject(): Project {
+  return {
+    id: crypto.randomUUID(),
+    title: 'Untitled',
+    tabs: TAB_COLORS.map((color) => ({
+      color,
+      content: '',
+      hasContent: false,
+    })),
+    activeTab: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+}
+
 export function loadProjects(): Project[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY)

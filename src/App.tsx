@@ -4,20 +4,28 @@ import TabBar from './components/TabBar'
 import SettingsBar from './components/SettingsBar'
 import AssistantPanel from './components/AssistantPanel'
 import ObsidianSync from './components/ObsidianSync'
-import { loadProjects, saveProjects, countWords, htmlToMarkdown } from './store'
+import { loadProjects, saveProjects, loadActiveProjectId, saveActiveProjectId, countWords, htmlToMarkdown, createNewProject } from './store'
 import type { Project } from './types'
+import { TAB_ROLES } from './types'
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>(() => loadProjects())
-  const [activeProjectIndex] = useState(0)
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    const saved = loadActiveProjectId()
+    const loaded = loadProjects()
+    if (saved && loaded.find(p => p.id === saved)) return saved
+    return loaded[0]?.id || ''
+  })
   const [focusMode, setFocusMode] = useState(false)
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [assistantVisible, setAssistantVisible] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
+  const [projectListOpen, setProjectListOpen] = useState(false)
 
-  const project = projects[activeProjectIndex]
-  const activeTab = project.activeTab
-  const currentContent = project.tabs[activeTab].content
+  const projectIndex = projects.findIndex(p => p.id === activeProjectId)
+  const project = projects[projectIndex] || projects[0]
+  const activeTab = project?.activeTab || 0
+  const currentContent = project?.tabs[activeTab]?.content || ''
   const wordCount = countWords(currentContent)
   const currentMarkdown = htmlToMarkdown(currentContent)
 
@@ -26,10 +34,16 @@ export default function App() {
     saveProjects(projects)
   }, [projects])
 
+  useEffect(() => {
+    saveActiveProjectId(activeProjectId)
+  }, [activeProjectId])
+
   const handleContentChange = useCallback((html: string) => {
     setProjects(prev => {
+      const idx = prev.findIndex(p => p.id === activeProjectId)
+      if (idx === -1) return prev
       const next = [...prev]
-      const p = { ...next[activeProjectIndex] }
+      const p = { ...next[idx] }
       const tabs = [...p.tabs]
       tabs[activeTab] = {
         ...tabs[activeTab],
@@ -38,30 +52,72 @@ export default function App() {
       }
       p.tabs = tabs
       p.updatedAt = Date.now()
-      next[activeProjectIndex] = p
+      next[idx] = p
       return next
     })
-  }, [activeProjectIndex, activeTab])
+  }, [activeProjectId, activeTab])
 
   const handleTabChange = useCallback((index: number) => {
     setProjects(prev => {
+      const idx = prev.findIndex(p => p.id === activeProjectId)
+      if (idx === -1) return prev
       const next = [...prev]
-      const p = { ...next[activeProjectIndex] }
+      const p = { ...next[idx] }
       p.activeTab = index
-      next[activeProjectIndex] = p
+      next[idx] = p
       return next
     })
-  }, [activeProjectIndex])
+  }, [activeProjectId])
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setProjects(prev => {
+      const idx = prev.findIndex(p => p.id === activeProjectId)
+      if (idx === -1) return prev
       const next = [...prev]
-      const p = { ...next[activeProjectIndex] }
+      const p = { ...next[idx] }
       p.title = newTitle || 'Untitled'
-      next[activeProjectIndex] = p
+      next[idx] = p
       return next
     })
-  }, [activeProjectIndex])
+  }, [activeProjectId])
+
+  const handleNewProject = useCallback(() => {
+    const newProj = createNewProject()
+    setProjects(prev => [newProj, ...prev])
+    setActiveProjectId(newProj.id)
+    setProjectListOpen(false)
+    setTitleEditing(true)
+  }, [])
+
+  const handleSwitchProject = useCallback((id: string) => {
+    setActiveProjectId(id)
+    setProjectListOpen(false)
+  }, [])
+
+  const handleDeleteProject = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (projects.length <= 1) return
+    const idx = projects.findIndex(p => p.id === id)
+    setProjects(prev => prev.filter(p => p.id !== id))
+    if (id === activeProjectId) {
+      const nextProject = projects[idx === 0 ? 1 : idx - 1]
+      setActiveProjectId(nextProject.id)
+    }
+  }, [projects, activeProjectId])
+
+  // Format relative time
+  function timeAgo(ts: number): string {
+    const diff = Date.now() - ts
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }
+
+  if (!project) return null
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -86,42 +142,199 @@ export default function App() {
           transition: 'padding 0.3s ease',
         }}
       >
-        {/* Project Title */}
-        {titleEditing ? (
-          <input
-            type="text"
-            value={project.title}
-            onChange={e => handleTitleChange(e.target.value)}
-            onBlur={() => setTitleEditing(false)}
-            onKeyDown={e => { if (e.key === 'Enter') setTitleEditing(false) }}
-            autoFocus
+        {/* Project Title + Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          {titleEditing ? (
+            <input
+              type="text"
+              value={project.title}
+              onChange={e => handleTitleChange(e.target.value)}
+              onBlur={() => setTitleEditing(false)}
+              onKeyDown={e => { if (e.key === 'Enter') setTitleEditing(false) }}
+              autoFocus
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '16px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                outline: 'none',
+                padding: '0',
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setTitleEditing(true)}
+              style={{
+                flex: 1,
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '16px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                cursor: 'text',
+              }}
+            >
+              {project.title}
+            </div>
+          )}
+
+          {/* Project switcher button */}
+          <button
+            onClick={() => setProjectListOpen(!projectListOpen)}
             style={{
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
+              background: projectListOpen ? 'rgba(0,0,0,0.06)' : 'none',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              padding: '4px 10px',
+              cursor: 'pointer',
               fontFamily: "'Inter', sans-serif",
-              fontSize: '16px',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              outline: 'none',
-              marginBottom: '12px',
-              padding: '0',
-            }}
-          />
-        ) : (
-          <div
-            onClick={() => setTitleEditing(true)}
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: '16px',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              cursor: 'text',
-              marginBottom: '12px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
             }}
           >
-            {project.title}
-          </div>
+            <span style={{ fontSize: '10px' }}>▼</span>
+            {projects.length} {projects.length === 1 ? 'note' : 'notes'}
+          </button>
+        </div>
+
+        {/* Project List Dropdown */}
+        {projectListOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={() => setProjectListOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 19 }}
+            />
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 20,
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+                padding: '6px',
+                marginBottom: '16px',
+                maxHeight: '320px',
+                overflowY: 'auto',
+              }}
+            >
+              {/* New Note button */}
+              <button
+                onClick={handleNewProject}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: 'none',
+                  borderRadius: '7px',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'var(--tab-sage)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
+                New note
+              </button>
+
+              <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 8px' }} />
+
+              {/* Project list */}
+              {projects.map(p => {
+                const isActive = p.id === activeProjectId
+                const tabsWithContent = p.tabs.filter(t => t.hasContent).length
+                const tabLabels = p.tabs
+                  .map((t, i) => t.hasContent ? TAB_ROLES[i].label : null)
+                  .filter(Boolean)
+
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSwitchProject(p.id)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: 'none',
+                      borderRadius: '7px',
+                      background: isActive ? 'rgba(0,0,0,0.04)' : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(0,0,0,0.03)' }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontFamily: "'Inter', sans-serif",
+                        fontSize: '13px',
+                        fontWeight: isActive ? 600 : 400,
+                        color: 'var(--text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {p.title}
+                      </div>
+                      <div style={{
+                        fontFamily: "'Inter', sans-serif",
+                        fontSize: '11px',
+                        color: 'var(--text-muted)',
+                        marginTop: '2px',
+                      }}>
+                        {timeAgo(p.updatedAt)}
+                        {tabsWithContent > 1 && (
+                          <span> · {tabLabels.join(', ')}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Delete button — only show if more than 1 project */}
+                    {projects.length > 1 && (
+                      <span
+                        onClick={(e) => handleDeleteProject(p.id, e)}
+                        style={{
+                          color: 'var(--text-muted)',
+                          fontSize: '14px',
+                          lineHeight: 1,
+                          padding: '2px 4px',
+                          borderRadius: '4px',
+                          opacity: 0.4,
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.opacity = '1'
+                          e.currentTarget.style.color = 'var(--tab-coral)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.opacity = '0.4'
+                          e.currentTarget.style.color = 'var(--text-muted)'
+                        }}
+                        title="Delete note"
+                      >
+                        ×
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </>
         )}
 
         {/* Tab Bar */}
