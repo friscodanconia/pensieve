@@ -4,11 +4,18 @@ import TabBar from './components/TabBar'
 import SettingsBar from './components/SettingsBar'
 import AssistantPanel from './components/AssistantPanel'
 import ObsidianSync from './components/ObsidianSync'
-import { loadProjects, saveProjects, loadActiveProjectId, saveActiveProjectId, countWords, htmlToMarkdown, createNewProject } from './store'
+import AuthModal from './components/AuthModal'
+import { useAuth } from './hooks/useAuth'
+import { useSubscription } from './hooks/useSubscription'
+import { fetchProjects, migrateLocalProjects } from './lib/db'
+import { loadProjects, saveProjects, loadActiveProjectId, saveActiveProjectId, countWords, htmlToMarkdown, createNewProject, syncProjectToSupabase, deleteProjectEverywhere } from './store'
 import type { Project } from './types'
 import { TAB_ROLES } from './types'
 
 export default function App() {
+  const auth = useAuth()
+  const subscriptionStatus = useSubscription(auth.user)
+
   const [projects, setProjects] = useState<Project[]>(() => loadProjects())
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     const saved = loadActiveProjectId()
@@ -21,6 +28,7 @@ export default function App() {
   const [assistantVisible, setAssistantVisible] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [projectListOpen, setProjectListOpen] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
 
   const projectIndex = projects.findIndex(p => p.id === activeProjectId)
   const project = projects[projectIndex] || projects[0]
@@ -37,6 +45,35 @@ export default function App() {
   useEffect(() => {
     saveActiveProjectId(activeProjectId)
   }, [activeProjectId])
+
+  // Sync current project to Supabase on change (debounced in store)
+  useEffect(() => {
+    if (auth.user && project) {
+      syncProjectToSupabase(auth.user.id, project)
+    }
+  }, [auth.user, project])
+
+  // On sign-in: migrate local projects, then load from Supabase
+  useEffect(() => {
+    if (!auth.user || auth.loading) return
+
+    async function syncOnLogin() {
+      const localProjects = loadProjects()
+      await migrateLocalProjects(auth.user!.id, localProjects)
+
+      const cloudProjects = await fetchProjects(auth.user!.id)
+      if (cloudProjects.length > 0) {
+        setProjects(cloudProjects)
+        saveProjects(cloudProjects)
+        // Keep current active project if it exists in cloud, else pick first
+        if (!cloudProjects.find(p => p.id === activeProjectId)) {
+          setActiveProjectId(cloudProjects[0].id)
+        }
+      }
+    }
+
+    syncOnLogin()
+  }, [auth.user, auth.loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleContentChange = useCallback((html: string) => {
     setProjects(prev => {
@@ -99,11 +136,12 @@ export default function App() {
     if (projects.length <= 1) return
     const idx = projects.findIndex(p => p.id === id)
     setProjects(prev => prev.filter(p => p.id !== id))
+    deleteProjectEverywhere(id, auth.user?.id)
     if (id === activeProjectId) {
       const nextProject = projects[idx === 0 ? 1 : idx - 1]
       setActiveProjectId(nextProject.id)
     }
-  }, [projects, activeProjectId])
+  }, [projects, activeProjectId, auth.user])
 
   // Format relative time
   function timeAgo(ts: number): string {
@@ -129,6 +167,9 @@ export default function App() {
         onFocusToggle={() => setFocusMode(!focusMode)}
         visible={settingsVisible}
         onToggleVisible={() => setSettingsVisible(!settingsVisible)}
+        user={auth.user}
+        onSignIn={() => setShowAuth(true)}
+        onSignOut={() => auth.signOut()}
       />
 
       {/* Main Editor Area */}
@@ -327,7 +368,7 @@ export default function App() {
                         }}
                         title="Delete note"
                       >
-                        ×
+                        x
                       </span>
                     )}
                   </button>
@@ -359,6 +400,7 @@ export default function App() {
             markdown={currentMarkdown}
             tabIndex={activeTab}
             tabColor={project.tabs[activeTab].color}
+            userEmail={auth.user?.email || null}
           />
         </div>
       </div>
@@ -381,7 +423,18 @@ export default function App() {
         visible={assistantVisible}
         onToggle={() => setAssistantVisible(!assistantVisible)}
         editorContent={currentMarkdown}
+        user={auth.user}
+        subscriptionStatus={subscriptionStatus}
+        onSignIn={() => setShowAuth(true)}
       />
+
+      {/* Auth Modal */}
+      {showAuth && (
+        <AuthModal
+          auth={auth}
+          onClose={() => setShowAuth(false)}
+        />
+      )}
     </div>
   )
 }

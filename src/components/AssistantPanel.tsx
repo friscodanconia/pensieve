@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { PensieveLogo } from './Icons'
+import PaywallGate from './PaywallGate'
+import type { User } from '@supabase/supabase-js'
+import type { SubscriptionStatus } from '../hooks/useSubscription'
 
 interface AssistantPanelProps {
   visible: boolean
   onToggle: () => void
   editorContent: string
+  user: User | null
+  subscriptionStatus: SubscriptionStatus
+  onSignIn: () => void
 }
 
 interface Message {
@@ -12,7 +18,7 @@ interface Message {
   content: string
 }
 
-export default function AssistantPanel({ visible, onToggle, editorContent }: AssistantPanelProps) {
+export default function AssistantPanel({ visible, onToggle, editorContent, user, subscriptionStatus, onSignIn }: AssistantPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -31,9 +37,19 @@ export default function AssistantPanel({ visible, onToggle, editorContent }: Ass
     setLoading(true)
 
     try {
+      // Get auth token
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (user) {
+        const { supabase } = await import('../lib/supabase')
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           messages: updatedMessages,
           editorContent,
@@ -41,16 +57,18 @@ export default function AssistantPanel({ visible, onToggle, editorContent }: Ass
       })
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || `API error: ${response.status}`)
       }
 
       const data = await response.json()
       const reply: Message = { role: 'assistant', content: data.reply }
       setMessages(prev => [...prev, reply])
-    } catch {
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Could not reach Pensieve.'
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Could not reach Pensieve. Make sure the server is running (node server.js).',
+        content: errorMsg,
       }])
     } finally {
       setLoading(false)
@@ -138,102 +156,105 @@ export default function AssistantPanel({ visible, onToggle, editorContent }: Ass
         </button>
       </div>
 
-      {/* Messages */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          minHeight: '200px',
-        }}
-      >
-        {messages.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', marginTop: '40px' }}>
-            Ask Pensieve to help you think through your writing.
-          </div>
-        ) : (
-          messages.map((msg, i) => (
+      {/* Paywall gate — shows upgrade CTA for non-Pro users */}
+      <PaywallGate user={user} subscriptionStatus={subscriptionStatus} onSignIn={onSignIn}>
+        {/* Messages */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            minHeight: '200px',
+          }}
+        >
+          {messages.length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', marginTop: '40px' }}>
+              Ask Pensieve to help you think through your writing.
+            </div>
+          ) : (
+            messages.map((msg, i) => (
+              <div
+                key={i}
+                style={{
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  padding: '8px 12px',
+                  borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                  background: msg.role === 'user' ? 'var(--text-primary)' : 'var(--code-bg)',
+                  color: msg.role === 'user' ? 'var(--bg-primary)' : 'var(--text-primary)',
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {msg.content}
+              </div>
+            ))
+          )}
+          {loading && (
             <div
-              key={i}
               style={{
-                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                alignSelf: 'flex-start',
                 maxWidth: '85%',
                 padding: '8px 12px',
-                borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                background: msg.role === 'user' ? 'var(--text-primary)' : 'var(--code-bg)',
-                color: msg.role === 'user' ? 'var(--bg-primary)' : 'var(--text-primary)',
+                borderRadius: '12px 12px 12px 2px',
+                background: 'var(--code-bg)',
+                color: 'var(--text-muted)',
                 fontSize: '13px',
                 lineHeight: 1.5,
               }}
             >
-              {msg.content}
+              Thinking...
             </div>
-          ))
-        )}
-        {loading && (
-          <div
-            style={{
-              alignSelf: 'flex-start',
-              maxWidth: '85%',
-              padding: '8px 12px',
-              borderRadius: '12px 12px 12px 2px',
-              background: 'var(--code-bg)',
-              color: 'var(--text-muted)',
-              fontSize: '13px',
-              lineHeight: 1.5,
-            }}
-          >
-            Thinking...
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
-            placeholder="Ask Pensieve..."
-            disabled={loading}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              background: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: '13px',
-              outline: 'none',
-              opacity: loading ? 0.6 : 1,
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={loading}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              background: loading ? 'var(--text-muted)' : 'var(--text-primary)',
-              color: 'var(--bg-primary)',
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: '12px',
-              cursor: loading ? 'default' : 'pointer',
-              fontWeight: 500,
-            }}
-          >
-            Send
-          </button>
+          )}
+          <div ref={messagesEndRef} />
         </div>
-      </div>
+
+        {/* Input */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+              placeholder="Ask Pensieve..."
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '13px',
+                outline: 'none',
+                opacity: loading ? 0.6 : 1,
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: loading ? 'var(--text-muted)' : 'var(--text-primary)',
+                color: 'var(--bg-primary)',
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '12px',
+                cursor: loading ? 'default' : 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </PaywallGate>
     </div>
   )
 }

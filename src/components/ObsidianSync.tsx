@@ -7,11 +7,16 @@ interface ObsidianSyncProps {
   markdown: string
   tabIndex: number
   tabColor: string
+  userEmail: string | null
 }
+
+const OWNER_EMAIL = import.meta.env.VITE_OWNER_EMAIL || ''
 
 type SyncStatus = 'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'retrying'
 
-export default function ObsidianSync({ projectTitle, markdown, tabIndex, tabColor }: ObsidianSyncProps) {
+export default function ObsidianSync({ projectTitle, markdown, tabIndex, tabColor, userEmail }: ObsidianSyncProps) {
+  // Only show Obsidian sync for the owner
+  if (OWNER_EMAIL && userEmail !== OWNER_EMAIL) return null
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)

@@ -1,12 +1,13 @@
 import type { Project } from './types'
 import { TAB_COLORS } from './types'
+import { upsertProject, deleteProjectFromDb } from './lib/db'
 
 const STORAGE_KEY = 'pensieve-projects'
 const ACTIVE_PROJECT_KEY = 'pensieve-active-project'
 
 const DEFAULT_CONTENT = `<h1>Welcome to Pensieve</h1>
 <p>A place to pour your thoughts — and an AI that helps you think deeper, without doing the writing for you.</p>
-<p>You're looking at a <strong>rich markdown editor</strong>. Everything you type is saved automatically to your Obsidian vault. Try a few things:</p>
+<p>You're looking at a <strong>rich markdown editor</strong>. Everything you type is saved automatically. Try a few things:</p>
 <ul>
 <li><p><strong>Bold</strong> with <code>Cmd+B</code>, <em>italic</em> with <code>Cmd+I</code></p></li>
 <li><p>Insert a <a href="https://example.com">link</a> with <code>Cmd+K</code></p></li>
@@ -78,6 +79,26 @@ export function loadActiveProjectId(): string | null {
 
 export function saveActiveProjectId(id: string) {
   localStorage.setItem(ACTIVE_PROJECT_KEY, id)
+}
+
+// Debounced Supabase sync
+let syncTimer: ReturnType<typeof setTimeout> | null = null
+
+export function syncProjectToSupabase(userId: string | undefined, project: Project) {
+  if (!userId) return
+
+  if (syncTimer) clearTimeout(syncTimer)
+  syncTimer = setTimeout(() => {
+    upsertProject(userId, project).catch(() => {
+      // Silent fail — localStorage is the fallback
+    })
+  }, 2000)
+}
+
+export function deleteProjectEverywhere(projectId: string, userId: string | undefined) {
+  if (userId) {
+    deleteProjectFromDb(projectId).catch(() => {})
+  }
 }
 
 export function countWords(html: string): number {

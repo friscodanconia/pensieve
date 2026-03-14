@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { FocusIcon, HelpIcon, UserIcon, EyeIcon, EyeOffIcon } from './Icons'
+import type { User } from '@supabase/supabase-js'
 
 interface SettingsBarProps {
   projectTitle: string
@@ -8,6 +9,9 @@ interface SettingsBarProps {
   onFocusToggle: () => void
   visible: boolean
   onToggleVisible: () => void
+  user: User | null
+  onSignIn: () => void
+  onSignOut: () => void
 }
 
 const SHORTCUTS = [
@@ -38,21 +42,29 @@ export default function SettingsBar({
   onFocusToggle,
   visible,
   onToggleVisible,
+  user,
+  onSignIn,
+  onSignOut,
 }: SettingsBarProps) {
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const shortcutsRef = useRef<HTMLDivElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (shortcutsRef.current && !shortcutsRef.current.contains(e.target as Node)) {
         setShowShortcuts(false)
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
     }
-    if (showShortcuts) {
+    if (showShortcuts || showUserMenu) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showShortcuts])
+  }, [showShortcuts, showUserMenu])
 
   if (!visible) {
     return (
@@ -184,22 +196,89 @@ export default function SettingsBar({
           )}
         </div>
 
-        <button
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            padding: '6px',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'all 0.2s',
-          }}
-          title="Account"
-        >
-          <UserIcon />
-        </button>
+        {/* User / Auth button */}
+        <div ref={userMenuRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => {
+              if (user) {
+                setShowUserMenu(!showUserMenu)
+              } else {
+                onSignIn()
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: user ? 'var(--tab-sage)' : 'var(--text-muted)',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'all 0.2s',
+            }}
+            title={user ? user.email || 'Account' : 'Sign in'}
+          >
+            <UserIcon />
+          </button>
+
+          {showUserMenu && user && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '8px',
+                background: 'var(--panel-bg)',
+                borderRadius: '10px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
+                padding: '12px 16px',
+                width: '220px',
+                zIndex: 100,
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '12px',
+              }}
+            >
+              <div style={{
+                color: 'var(--text-secondary)',
+                fontSize: '11px',
+                marginBottom: '4px',
+              }}>
+                Signed in as
+              </div>
+              <div style={{
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                fontWeight: 500,
+                marginBottom: '12px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {user.email}
+              </div>
+              <button
+                onClick={() => {
+                  setShowUserMenu(false)
+                  onSignOut()
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           onClick={onToggleVisible}

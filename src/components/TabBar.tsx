@@ -52,7 +52,7 @@ export default function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
                 transition: 'all 0.2s ease',
                 fontFamily: "'Inter', sans-serif",
                 fontSize: '13px',
-                fontWeight: isActive ? 600 : 500,
+                fontWeight: isActive ? 700 : 600,
                 letterSpacing: '-0.01em',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -65,7 +65,7 @@ export default function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
                   ? colors.solid
                   : isHovered
                     ? 'var(--text-secondary)'
-                    : 'var(--text-muted)',
+                    : 'var(--text-secondary)',
                 boxShadow: isActive
                   ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)'
                   : 'none',
