@@ -40,6 +40,8 @@ Language:
 - Do not use "not X, but Y" constructions.
 - Write plainly.`
 
+import { createClient } from '@supabase/supabase-js'
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -50,6 +52,19 @@ export default async function handler(req, res) {
 
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'No API key configured' })
+
+  // Require sign-in
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+
+  if (SUPABASE_SERVICE_ROLE_KEY && SUPABASE_URL) {
+    const token = req.headers.authorization?.replace('Bearer ', '')
+    if (!token) return res.status(401).json({ error: 'Sign in required' })
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
+    if (authErr || !user) return res.status(401).json({ error: 'Invalid token' })
+  }
 
   try {
     const { newContent, existingSources, draftContent } = req.body
