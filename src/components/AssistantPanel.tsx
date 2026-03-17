@@ -19,6 +19,7 @@ interface AssistantPanelProps {
   editorContent: string
   user: User | null
   subscriptionStatus: SubscriptionStatus
+  credits: number | null
   onSignIn: () => void
 }
 
@@ -27,7 +28,7 @@ interface Message {
   content: string
 }
 
-export default function AssistantPanel({ visible, onToggle, editorContent, user, subscriptionStatus, onSignIn }: AssistantPanelProps) {
+export default function AssistantPanel({ visible, onToggle, editorContent, user, subscriptionStatus, credits, onSignIn }: AssistantPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -294,7 +295,7 @@ export default function AssistantPanel({ visible, onToggle, editorContent, user,
       </div>
 
       {tauri ? chatUI : (
-        <PaywallGate user={user} subscriptionStatus={subscriptionStatus} onSignIn={onSignIn}>
+        <PaywallGate user={user} subscriptionStatus={subscriptionStatus} credits={credits} onSignIn={onSignIn}>
           {chatUI}
         </PaywallGate>
       )}

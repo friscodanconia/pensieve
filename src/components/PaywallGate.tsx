@@ -5,15 +5,21 @@ import type { SubscriptionStatus } from '../hooks/useSubscription'
 interface PaywallGateProps {
   user: User | null
   subscriptionStatus: SubscriptionStatus
+  credits: number | null
   onSignIn: () => void
   children: React.ReactNode
 }
 
-export default function PaywallGate({ user, subscriptionStatus, onSignIn, children }: PaywallGateProps) {
+export default function PaywallGate({ user, subscriptionStatus, credits, onSignIn, children }: PaywallGateProps) {
   const [upgrading, setUpgrading] = useState(false)
 
-  // Pro users — show the assistant
+  // Subscriber: unlimited access
   if (user && subscriptionStatus === 'active') {
+    return <>{children}</>
+  }
+
+  // Signed in with credits remaining: allow access
+  if (user && credits !== null && credits > 0) {
     return <>{children}</>
   }
 
@@ -30,12 +36,11 @@ export default function PaywallGate({ user, subscriptionStatus, onSignIn, childr
         textAlign: 'center',
         fontFamily: "'Inter', sans-serif",
       }}>
-        <div style={{ fontSize: '28px', marginBottom: '12px' }}>&#9998;</div>
         <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
-          Pensieve Pro
+          Sign in to Pensieve
         </h3>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px', maxWidth: '260px', lineHeight: 1.5 }}>
-          Sign in to unlock the AI writing assistant that helps you think deeper.
+          Sign in to use the AI writing assistant, Mirror analysis, and source extraction. You get 20 free credits to start.
         </p>
         <button
           onClick={onSignIn}
@@ -57,7 +62,7 @@ export default function PaywallGate({ user, subscriptionStatus, onSignIn, childr
     )
   }
 
-  // Signed in but free tier
+  // Signed in, no credits, no subscription
   const handleUpgrade = async () => {
     setUpgrading(true)
     try {
@@ -94,15 +99,14 @@ export default function PaywallGate({ user, subscriptionStatus, onSignIn, childr
       textAlign: 'center',
       fontFamily: "'Inter', sans-serif",
     }}>
-      <div style={{ fontSize: '28px', marginBottom: '12px' }}>&#9998;</div>
       <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
-        Upgrade to Pensieve Pro
+        Credits used up
       </h3>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px', maxWidth: '260px', lineHeight: 1.5 }}>
-        An AI assistant that reads your draft and helps you think — asks probing questions, flags weak spots, suggests structure.
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', maxWidth: '280px', lineHeight: 1.5 }}>
+        Subscribe to Pensieve Pro for unlimited access to the AI assistant, Mirror analysis, and source extraction.
       </p>
       <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>
-        $8/month
+        $8/month or $48/year
       </p>
       <button
         onClick={handleUpgrade}

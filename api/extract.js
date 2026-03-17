@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'No API key configured' })
 
-  // Require sign-in
+  // Verify auth + credits or subscription
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 
@@ -64,6 +64,21 @@ export default async function handler(req, res) {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
     if (authErr || !user) return res.status(401).json({ error: 'Invalid token' })
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('subscription_status, credits')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.subscription_status === 'active') {
+      // Subscriber: unlimited
+    } else if (profile?.credits > 0) {
+      const { data: remaining } = await supabase.rpc('use_credit', { user_id: user.id })
+      res.setHeader('X-Credits-Remaining', String(remaining))
+    } else {
+      return res.status(403).json({ error: 'No credits remaining', credits: 0 })
+    }
   }
 
   try {

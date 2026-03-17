@@ -8,6 +8,7 @@ import ObsidianSync from './components/ObsidianSync'
 import AuthModal from './components/AuthModal'
 import { useAuth } from './hooks/useAuth'
 import { useSubscription } from './hooks/useSubscription'
+import { useCredits } from './hooks/useCredits'
 import { fetchProjects, migrateLocalProjects } from './lib/db'
 import { loadProjects, saveProjects, loadActiveProjectId, saveActiveProjectId, countWords, htmlToMarkdown, createNewProject, syncProjectToSupabase, deleteProjectEverywhere } from './store'
 import type { Project } from './types'
@@ -18,6 +19,7 @@ const isTauriApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in win
 export default function App() {
   const auth = useAuth()
   const subscriptionStatus = useSubscription(auth.user)
+  const { credits, displayCredits, hasCredits } = useCredits(auth.user)
 
   const [projects, setProjects] = useState<Project[]>(() => loadProjects())
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
@@ -595,6 +597,7 @@ export default function App() {
           <span>
             {wordCount} {wordCount === 1 ? 'word' : 'words'}
             {wordCount > 0 && ` · ${Math.max(1, Math.ceil(wordCount / 230))} min read`}
+            {!isTauriApp && hasCredits && displayCredits && ` · ${displayCredits}`}
           </span>
           <ObsidianSync
             projectTitle={project.title}
@@ -626,6 +629,7 @@ export default function App() {
         editorContent={allTabsContext}
         user={auth.user}
         subscriptionStatus={subscriptionStatus}
+        credits={credits}
         onSignIn={() => setShowAuth(true)}
       />
 
