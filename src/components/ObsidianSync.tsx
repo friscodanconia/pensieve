@@ -12,14 +12,40 @@ interface ObsidianSyncProps {
 
 const OWNER_EMAIL = import.meta.env.VITE_OWNER_EMAIL || ''
 
+// Check at call time, not module load time — Tauri may inject globals after module eval
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
 type SyncStatus = 'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'retrying'
 
+async function tauriInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke(cmd, args)
+}
+
 export default function ObsidianSync({ projectTitle, markdown, tabIndex, tabColor, userEmail }: ObsidianSyncProps) {
-  // Only show Obsidian sync for the owner
-  if (OWNER_EMAIL && userEmail !== OWNER_EMAIL) return null
+  const tauri = isTauri()
+
+  // In Tauri, it's always the owner's machine — skip email gate
+  // On web, only show for the owner
+  if (!tauri && OWNER_EMAIL && userEmail !== OWNER_EMAIL) return null
+
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [vaultExists, setVaultExists] = useState(true)
+
+  // Check if vault exists on first render (Tauri only)
+  useEffect(() => {
+    if (tauri) {
+      tauriInvoke('get_vault_path', {}).then((path) => {
+        // If we got a path, check if saving works by looking at the result
+        // The vault check happens server-side in save_to_vault
+        if (path) setVaultExists(true)
+      }).catch(() => setVaultExists(false))
+    }
+  }, [tauri])
 
   // Track the latest values for beforeunload flush
   const latestRef = useRef({ projectTitle, markdown, tabIndex, tabColor })
@@ -59,31 +85,36 @@ source: pensieve
 
       pendingRef.current = true
 
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (response.ok) {
-        pendingRef.current = false
-        lastSavedContentRef.current = md
-        setRetryCount(0)
-        setStatus('saved')
-        setLastSaved(new Date().toLocaleTimeString())
-        setTimeout(() => setStatus('idle'), 2000)
-        return true
-      } else {
-        // Retry up to 2 times with backoff
-        if (retry < 2) {
-          await new Promise(r => setTimeout(r, (retry + 1) * 2000))
-          return saveToCloud(retry + 1)
+      if (isTauri()) {
+        // Native app: write directly to Obsidian vault via Rust backend
+        const result = await tauriInvoke('save_to_vault', {
+          filename: payload.filename,
+          content: payload.content,
+        }) as string
+        // If no vault found, hide sync UI silently
+        if (result.includes('skipped')) {
+          setVaultExists(false)
+          pendingRef.current = false
+          setStatus('idle')
+          return true
         }
-        pendingRef.current = false
-        setRetryCount(retry)
-        setStatus('error')
-        return false
+      } else {
+        // Web: use Vercel API route
+        const response = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
       }
+
+      pendingRef.current = false
+      lastSavedContentRef.current = md
+      setRetryCount(0)
+      setStatus('saved')
+      setLastSaved(new Date().toLocaleTimeString())
+      setTimeout(() => setStatus('idle'), 2000)
+      return true
     } catch {
       if (retry < 2) {
         await new Promise(r => setTimeout(r, (retry + 1) * 2000))
@@ -91,7 +122,7 @@ source: pensieve
       }
       pendingRef.current = false
       setRetryCount(retry)
-      setStatus('offline')
+      setStatus(isTauri() ? 'error' : 'offline')
       return false
     }
   }, [buildPayload])
@@ -131,12 +162,14 @@ source: pensieve
 
       const payload = buildPayload(title, md, idx, color)
 
-      // Use sendBeacon for reliable save during page unload
-      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
-      navigator.sendBeacon('/api/save', blob)
+      if (isTauri()) {
+        tauriInvoke('save_to_vault', { filename: payload.filename, content: payload.content }).catch(() => {})
+      } else {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+        navigator.sendBeacon('/api/save', blob)
+      }
     }
 
-    // Also save on visibility change (phone switching apps, etc.)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && pendingRef.current) {
         const { markdown: md } = latestRef.current
@@ -155,6 +188,9 @@ source: pensieve
     }
   }, [buildPayload, saveToCloud])
 
+  // Hide sync UI entirely if no vault found
+  if (tauri && !vaultExists) return null
+
   const statusColors: Record<SyncStatus, string> = {
     idle: 'var(--text-muted)',
     saving: 'var(--tab-amber)',
@@ -165,9 +201,9 @@ source: pensieve
   }
 
   const statusText: Record<SyncStatus, string> = {
-    idle: lastSaved ? `Synced ${lastSaved}` : 'Cloud sync',
-    saving: 'Syncing...',
-    saved: 'Synced',
+    idle: lastSaved ? `Synced ${lastSaved}` : (tauri ? 'Vault sync' : 'Cloud sync'),
+    saving: tauri ? 'Saving to vault...' : 'Syncing...',
+    saved: tauri ? 'Saved to vault' : 'Synced',
     error: `Sync failed${retryCount > 0 ? ` (${retryCount} retries)` : ''} — will retry`,
     offline: 'Offline — saved locally',
     retrying: 'Retrying...',
@@ -188,7 +224,7 @@ source: pensieve
       title={
         status === 'error' || status === 'offline'
           ? 'Click to retry sync'
-          : 'Auto-syncs to GitHub → Obsidian vault'
+          : tauri ? 'Auto-saves to Obsidian vault' : 'Auto-syncs to GitHub → Obsidian vault'
       }
       onClick={() => {
         if (status === 'error' || status === 'offline') {

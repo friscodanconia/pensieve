@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import Editor from './components/Editor'
 import TabBar from './components/TabBar'
+import MirrorView from './components/MirrorView'
 import SettingsBar from './components/SettingsBar'
 import AssistantPanel from './components/AssistantPanel'
 import ObsidianSync from './components/ObsidianSync'
@@ -11,6 +12,8 @@ import { fetchProjects, migrateLocalProjects } from './lib/db'
 import { loadProjects, saveProjects, loadActiveProjectId, saveActiveProjectId, countWords, htmlToMarkdown, createNewProject, syncProjectToSupabase, deleteProjectEverywhere } from './store'
 import type { Project } from './types'
 import { TAB_ROLES } from './types'
+
+const isTauriApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 export default function App() {
   const auth = useAuth()
@@ -29,6 +32,11 @@ export default function App() {
   const [titleEditing, setTitleEditing] = useState(false)
   const [projectListOpen, setProjectListOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
+  const [mirrorAnalysis, setMirrorAnalysis] = useState('')
+  const [mirrorStatus, setMirrorStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle')
+  const [mirrorLastUpdated, setMirrorLastUpdated] = useState<string | null>(null)
+  const [sourcesPendingProcess, setSourcesPendingProcess] = useState(false)
+  const [sourcesProcessing, setSourcesProcessing] = useState(false)
 
   const projectIndex = projects.findIndex(p => p.id === activeProjectId)
   const project = projects[projectIndex] || projects[0]
@@ -36,6 +44,96 @@ export default function App() {
   const currentContent = project?.tabs[activeTab]?.content || ''
   const wordCount = countWords(currentContent)
   const currentMarkdown = htmlToMarkdown(currentContent)
+
+  // Build full context across Draft + Sources for the assistant (skip Mirror — it's AI-generated)
+  const allTabsContext = project ? project.tabs
+    .map((tab, i) => {
+      if (i >= TAB_ROLES.length || !TAB_ROLES[i].editable) return null
+      const md = htmlToMarkdown(tab.content)
+      if (!md.trim()) return null
+      const label = TAB_ROLES[i].label
+      const isActive = i === activeTab
+      return `[${label}${isActive ? ' — CURRENTLY EDITING' : ''}]\n${md}\n[END ${label}]`
+    })
+    .filter(Boolean)
+    .join('\n\n') : ''
+
+  // Detect paste in Sources tab
+  useEffect(() => {
+    if (activeTab !== 1) return
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain') || ''
+      if (text.length > 100) {
+        // Debounce: wait for the editor to update, then show the banner
+        setTimeout(() => setSourcesPendingProcess(true), 500)
+      }
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [activeTab])
+
+  // Hide the process banner when switching away from Sources
+  useEffect(() => {
+    if (activeTab !== 1) {
+      setSourcesPendingProcess(false)
+    }
+  }, [activeTab])
+
+  // Process Sources content
+  const handleProcessSources = useCallback(async () => {
+    if (!project) return
+    const sourcesContent = htmlToMarkdown(project.tabs[1]?.content || '')
+    const draftContent = htmlToMarkdown(project.tabs[0]?.content || '')
+    if (!sourcesContent.trim()) return
+
+    setSourcesProcessing(true)
+    setSourcesPendingProcess(false)
+
+    try {
+      let result: string
+      if (isTauriApp) {
+        const { invoke } = await import('@tauri-apps/api/core')
+        result = await invoke('extract_source', {
+          newContent: sourcesContent,
+          existingSources: '',
+          draftContent,
+        }) as string
+      } else {
+        // Web: use dedicated extract endpoint
+        const response = await fetch('/api/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newContent: sourcesContent,
+            existingSources: '',
+            draftContent,
+          }),
+        })
+        if (!response.ok) throw new Error('API error')
+        const data = await response.json()
+        result = data.reply
+      }
+
+      // Replace Sources content with the processed extraction
+      setProjects(prev => {
+        const idx = prev.findIndex(p => p.id === activeProjectId)
+        if (idx === -1) return prev
+        const next = [...prev]
+        const p = { ...next[idx] }
+        const tabs = [...p.tabs]
+        const processedHtml = result.split('\n').map(line => `<p>${line || '<br>'}</p>`).join('')
+        tabs[1] = { ...tabs[1], content: processedHtml, hasContent: true }
+        p.tabs = tabs
+        p.updatedAt = Date.now()
+        next[idx] = p
+        return next
+      })
+    } catch {
+      // Silently fail, keep original content
+    } finally {
+      setSourcesProcessing(false)
+    }
+  }, [project, activeProjectId])
 
   // Save to localStorage on change
   useEffect(() => {
@@ -158,7 +256,13 @@ export default function App() {
   if (!project) return null
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      background: 'var(--bg-primary)',
+    }}>
       {/* Settings Bar */}
       <SettingsBar
         projectTitle={project.title}
@@ -172,7 +276,7 @@ export default function App() {
         onSignOut={() => auth.signOut()}
       />
 
-      {/* Main Editor Area */}
+      {/* Main Editor Area — shifts left when assistant panel is open */}
       <div
         style={{
           flex: 1,
@@ -180,7 +284,8 @@ export default function App() {
           width: '100%',
           margin: '0 auto',
           padding: settingsVisible ? '72px 24px 120px' : '48px 24px 120px',
-          transition: 'padding 0.3s ease',
+          transition: 'all 0.3s ease',
+          marginRight: assistantVisible ? '400px' : 'auto',
         }}
       >
         {/* Project Title + Switcher */}
@@ -193,6 +298,7 @@ export default function App() {
               onBlur={() => setTitleEditing(false)}
               onKeyDown={e => { if (e.key === 'Enter') setTitleEditing(false) }}
               autoFocus
+              onFocus={e => { if (project.title === 'Untitled') e.target.select() }}
               style={{
                 flex: 1,
                 border: 'none',
@@ -387,14 +493,100 @@ export default function App() {
           />
         </div>
 
-        {/* Editor */}
-        <Editor
-          content={currentContent}
-          onChange={handleContentChange}
-        />
+        {/* Sources processing banner */}
+        {activeTab === 1 && (sourcesPendingProcess || sourcesProcessing) && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            marginBottom: '16px',
+            background: 'var(--code-bg)',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontFamily: "'Inter', sans-serif",
+            color: 'var(--text-secondary)',
+          }}>
+            {sourcesProcessing ? (
+              <span>Processing sources...</span>
+            ) : (
+              <>
+                <span>New content detected. Process it?</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setSourcesPendingProcess(false)}
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      padding: '4px 12px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: 'var(--text-muted)',
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Skip
+                  </button>
+                  <button
+                    onClick={handleProcessSources}
+                    style={{
+                      background: 'var(--text-primary)',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '4px 12px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: 'var(--bg-primary)',
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Process
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
-        {/* Obsidian Sync Status */}
-        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end' }}>
+        {/* Editor or Mirror View */}
+        {activeTab === 2 ? (
+          <MirrorView
+            draftMarkdown={htmlToMarkdown(project.tabs[0]?.content || '')}
+            sourcesMarkdown={htmlToMarkdown(project.tabs[1]?.content || '')}
+            projectTitle={project.title}
+            analysis={mirrorAnalysis}
+            onAnalysis={setMirrorAnalysis}
+            status={mirrorStatus}
+            onStatus={setMirrorStatus}
+            lastUpdated={mirrorLastUpdated}
+            onLastUpdated={setMirrorLastUpdated}
+          />
+        ) : (
+          <Editor
+            content={currentContent}
+            onChange={handleContentChange}
+            tabIndex={activeTab}
+          />
+        )}
+
+        {/* Status bar */}
+        <div style={{
+          marginTop: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          fontFamily: "'Inter', sans-serif",
+          borderTop: '1px solid var(--border-color)',
+          paddingTop: '12px',
+        }}>
+          <span>
+            {wordCount} {wordCount === 1 ? 'word' : 'words'}
+            {wordCount > 0 && ` · ${Math.max(1, Math.ceil(wordCount / 230))} min read`}
+          </span>
           <ObsidianSync
             projectTitle={project.title}
             markdown={currentMarkdown}
@@ -422,14 +614,14 @@ export default function App() {
       <AssistantPanel
         visible={assistantVisible}
         onToggle={() => setAssistantVisible(!assistantVisible)}
-        editorContent={currentMarkdown}
+        editorContent={allTabsContext}
         user={auth.user}
         subscriptionStatus={subscriptionStatus}
         onSignIn={() => setShowAuth(true)}
       />
 
-      {/* Auth Modal */}
-      {showAuth && (
+      {/* Auth Modal — not needed in native app */}
+      {!isTauriApp && showAuth && (
         <AuthModal
           auth={auth}
           onClose={() => setShowAuth(false)}

@@ -35,6 +35,8 @@ const MARKDOWN = [
   { syntax: '[text](url)', action: 'Link' },
 ]
 
+const isTauriApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
 export default function SettingsBar({
   projectTitle,
   wordCount,
@@ -196,89 +198,91 @@ export default function SettingsBar({
           )}
         </div>
 
-        {/* User / Auth button */}
-        <div ref={userMenuRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => {
-              if (user) {
-                setShowUserMenu(!showUserMenu)
-              } else {
-                onSignIn()
-              }
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: user ? 'var(--tab-sage)' : 'var(--text-muted)',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              transition: 'all 0.2s',
-            }}
-            title={user ? user.email || 'Account' : 'Sign in'}
-          >
-            <UserIcon />
-          </button>
-
-          {showUserMenu && user && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                background: 'var(--panel-bg)',
-                borderRadius: '10px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
-                padding: '12px 16px',
-                width: '220px',
-                zIndex: 100,
-                fontFamily: "'Inter', sans-serif",
-                fontSize: '12px',
+        {/* User / Auth button — hidden in native app */}
+        {!isTauriApp && (
+          <div ref={userMenuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                if (user) {
+                  setShowUserMenu(!showUserMenu)
+                } else {
+                  onSignIn()
+                }
               }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: user ? 'var(--tab-sage)' : 'var(--text-muted)',
+                padding: '6px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'all 0.2s',
+              }}
+              title={user ? user.email || 'Account' : 'Sign in'}
             >
-              <div style={{
-                color: 'var(--text-secondary)',
-                fontSize: '11px',
-                marginBottom: '4px',
-              }}>
-                Signed in as
-              </div>
-              <div style={{
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                fontWeight: 500,
-                marginBottom: '12px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {user.email}
-              </div>
-              <button
-                onClick={() => {
-                  setShowUserMenu(false)
-                  onSignOut()
-                }}
+              <UserIcon />
+            </button>
+
+            {showUserMenu && user && (
+              <div
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                  background: 'none',
-                  cursor: 'pointer',
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: 'var(--panel-bg)',
+                  borderRadius: '10px',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
+                  padding: '12px 16px',
+                  width: '220px',
+                  zIndex: 100,
                   fontFamily: "'Inter', sans-serif",
                   fontSize: '12px',
-                  color: 'var(--text-secondary)',
                 }}
               >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
+                <div style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '11px',
+                  marginBottom: '4px',
+                }}>
+                  Signed in as
+                </div>
+                <div style={{
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  marginBottom: '12px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {user.email}
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    onSignOut()
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           onClick={onToggleVisible}

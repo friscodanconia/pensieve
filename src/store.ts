@@ -14,17 +14,38 @@ const DEFAULT_CONTENT = `<h1>Welcome to Pensieve</h1>
 <li><p>Type <code>#</code> at the start of a line for a heading</p></li>
 <li><p>Use <code>&gt;</code> for blockquotes, <code>-</code> for bullet lists</p></li>
 </ul>
-<h2>Five tabs, five purposes</h2>
-<p>Each colored tab above has a role. Hover to see what it's for:</p>
+<h2>Three tabs, three purposes</h2>
 <ul>
-<li><p><strong>Draft</strong> (coral) — your main writing lives here</p></li>
-<li><p><strong>Research</strong> (amber) — quotes, links, raw material</p></li>
-<li><p><strong>Outline</strong> (sage) — map your argument before you write</p></li>
-<li><p><strong>Scratchpad</strong> (sky) — freewrite with no stakes</p></li>
-<li><p><strong>Feedback</strong> (lavender) — revision notes and editor comments</p></li>
+<li><p><strong>Draft</strong> — your main writing lives here</p></li>
+<li><p><strong>Sources</strong> — paste articles, quotes, data. Pensieve extracts what matters.</p></li>
+<li><p><strong>Mirror</strong> — a living analysis of your writing. You never type here — you glance at it.</p></li>
 </ul>
 <h2>The AI assistant</h2>
-<p>Click the icon in the bottom-left to open Pensieve's assistant. It reads your draft and helps you think — asks probing questions, flags weak spots, suggests structure. It never writes for you. <em>The words are always yours.</em></p>`
+<p>Click the Assistant button in the bottom-right to open Pensieve's writing partner. It reads your draft, your sources, and Mirror's analysis — then helps you think. It never writes for you. <em>The words are always yours.</em></p>`
+
+// Migrate a project from 5-tab to 3-tab structure
+function migrateProject(p: Project): Project {
+  if (p.tabs.length <= 3) return p
+
+  // Tab 0 (Draft) → Draft
+  // Tabs 1-3 (Research/Outline/Scratchpad) → merge into Sources
+  // Tab 4 (Feedback) → drop
+  const draftContent = p.tabs[0]?.content || ''
+  const sourceParts = [1, 2, 3]
+    .map(i => p.tabs[i]?.content || '')
+    .filter(c => c.replace(/<[^>]*>/g, '').trim().length > 0)
+  const sourcesContent = sourceParts.join('<hr>')
+
+  return {
+    ...p,
+    tabs: TAB_COLORS.map((color, i) => {
+      if (i === 0) return { color, content: draftContent, hasContent: draftContent.replace(/<[^>]*>/g, '').trim().length > 0 }
+      if (i === 1) return { color, content: sourcesContent, hasContent: sourcesContent.replace(/<[^>]*>/g, '').trim().length > 0 }
+      return { color, content: '', hasContent: false } // Mirror starts empty
+    }),
+    activeTab: Math.min(p.activeTab, 2),
+  }
+}
 
 function createDefaultProject(): Project {
   return {
@@ -61,7 +82,15 @@ export function loadProjects(): Project[] {
     const data = localStorage.getItem(STORAGE_KEY)
     if (data) {
       const projects = JSON.parse(data) as Project[]
-      if (projects.length > 0) return projects
+      if (projects.length > 0) {
+        // Migrate any old 5-tab projects
+        const migrated = projects.map(migrateProject)
+        // Save if migration happened
+        if (JSON.stringify(migrated) !== data) {
+          saveProjects(migrated)
+        }
+        return migrated
+      }
     }
   } catch { /* ignore */ }
   const defaultProject = createDefaultProject()
