@@ -42,11 +42,6 @@ export default function MirrorView({
       return
     }
 
-    const context: string[] = []
-    if (draftMarkdown.trim()) context.push(`[Draft]\n${draftMarkdown}\n[END Draft]`)
-    if (sourcesMarkdown.trim()) context.push(`[Sources]\n${sourcesMarkdown}\n[END Sources]`)
-    const fullContext = context.join('\n\n')
-
     onStatus('analyzing')
 
     try {

@@ -5,6 +5,8 @@
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat" },
     { "source": "/api/save", "destination": "/api/save" },
+    { "source": "/api/extract", "destination": "/api/extract" },
+    { "source": "/api/mirror", "destination": "/api/mirror" },
     { "source": "/api/create-checkout", "destination": "/api/create-checkout" },
     { "source": "/api/webhook", "destination": "/api/webhook" },
     { "source": "/api/subscription-status", "destination": "/api/subscription-status" }
