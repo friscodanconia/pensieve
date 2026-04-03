@@ -91,9 +91,6 @@ export default function MirrorView({
     if (hash === contentHashRef.current) return
     contentHashRef.current = hash
 
-    // If we already have analysis and content hasn't changed, skip
-    if (analysis && hash === contentHashRef.current) return
-
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       runAnalysis()
@@ -102,7 +99,7 @@ export default function MirrorView({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [draftMarkdown, sourcesMarkdown, runAnalysis, analysis])
+  }, [draftMarkdown, sourcesMarkdown, runAnalysis])
 
   // Run on first mount if no analysis exists yet
   useEffect(() => {
