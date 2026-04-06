@@ -81,6 +81,13 @@ export default function App() {
     }
   }, [activeTab])
 
+  // Reset Mirror state when switching projects so stale analysis isn't shown
+  useEffect(() => {
+    setMirrorAnalysis('')
+    setMirrorStatus('idle')
+    setMirrorLastUpdated(null)
+  }, [activeProjectId])
+
   // Process Sources content
   const handleProcessSources = useCallback(async () => {
     if (!project) return
