@@ -5,31 +5,11 @@ import { upsertProject, deleteProjectFromDb } from './lib/db'
 const STORAGE_KEY = 'pensieve-projects'
 const ACTIVE_PROJECT_KEY = 'pensieve-active-project'
 
-const DEFAULT_CONTENT = `<h1>Welcome to Pensieve</h1>
-<p>A place to pour your thoughts — and an AI that helps you think deeper, without doing the writing for you.</p>
-<p>You're looking at a <strong>rich markdown editor</strong>. Everything you type is saved automatically. Try a few things:</p>
-<ul>
-<li><p><strong>Bold</strong> with <code>Cmd+B</code>, <em>italic</em> with <code>Cmd+I</code></p></li>
-<li><p>Insert a <a href="https://example.com">link</a> with <code>Cmd+K</code></p></li>
-<li><p>Type <code>#</code> at the start of a line for a heading</p></li>
-<li><p>Use <code>&gt;</code> for blockquotes, <code>-</code> for bullet lists</p></li>
-</ul>
-<h2>Three tabs, three purposes</h2>
-<ul>
-<li><p><strong>Draft</strong> — your main writing lives here</p></li>
-<li><p><strong>Sources</strong> — paste articles, quotes, data. Pensieve extracts what matters.</p></li>
-<li><p><strong>Mirror</strong> — a living analysis of your writing. You never type here — you glance at it.</p></li>
-</ul>
-<h2>The AI assistant</h2>
-<p>Click the Assistant button in the bottom-right to open Pensieve's writing partner. It reads your draft, your sources, and Mirror's analysis — then helps you think. It never writes for you. <em>The words are always yours.</em></p>`
 
 // Migrate a project from 5-tab to 3-tab structure
-function migrateProject(p: Project): Project {
+function migrate5TabProject(p: Project): Project {
   if (p.tabs.length <= 3) return p
 
-  // Tab 0 (Draft) → Draft
-  // Tabs 1-3 (Research/Outline/Scratchpad) → merge into Sources
-  // Tab 4 (Feedback) → drop
   const draftContent = p.tabs[0]?.content || ''
   const sourceParts = [1, 2, 3]
     .map(i => p.tabs[i]?.content || '')
@@ -39,22 +19,61 @@ function migrateProject(p: Project): Project {
   return {
     ...p,
     tabs: TAB_COLORS.map((color, i) => {
-      if (i === 0) return { color, content: draftContent, hasContent: draftContent.replace(/<[^>]*>/g, '').trim().length > 0 }
-      if (i === 1) return { color, content: sourcesContent, hasContent: sourcesContent.replace(/<[^>]*>/g, '').trim().length > 0 }
-      return { color, content: '', hasContent: false } // Mirror starts empty
+      if (i === 0) return { color, content: sourcesContent, hasContent: sourcesContent.replace(/<[^>]*>/g, '').trim().length > 0 }
+      if (i === 1) return { color, content: '', hasContent: false }
+      if (i === 2) return { color, content: draftContent, hasContent: draftContent.replace(/<[^>]*>/g, '').trim().length > 0 }
+      return { color, content: '', hasContent: false }
     }),
-    activeTab: Math.min(p.activeTab, 2),
+    activeTab: 0,
   }
+}
+
+// Migrate from old 3-tab (Draft/Sources/Mirror: coral/amber/sage)
+// to new 3-tab (Collect/Think/Write: amber/sage/coral)
+function migrateToCollectThinkWrite(p: Project): Project {
+  // Detect old layout: tabs[0].color === 'coral' means old Draft-first order
+  if (p.tabs.length !== 3 || p.tabs[0].color !== 'coral') return p
+
+  const oldDraft = p.tabs[0]   // coral — was Draft
+  const oldSources = p.tabs[1] // amber — was Sources
+  // old Mirror (sage) content is discarded — Think generates fresh
+
+  // Map active tab: old 0 (Draft) → new 2 (Write), old 1 (Sources) → new 0 (Collect), old 2 (Mirror) → new 1 (Think)
+  const tabMap: Record<number, number> = { 0: 2, 1: 0, 2: 1 }
+  const newActiveTab = tabMap[p.activeTab] ?? 0
+
+  // Add "Imported from Sources" label if sources had content
+  const sourcesHasContent = oldSources.content.replace(/<[^>]*>/g, '').trim().length > 0
+  const collectContent = sourcesHasContent
+    ? `<p><em>Imported from Sources</em></p><hr>${oldSources.content}`
+    : oldSources.content
+
+  return {
+    ...p,
+    tabs: [
+      { color: 'amber', content: collectContent, hasContent: sourcesHasContent },
+      { color: 'sage', content: '', hasContent: false },
+      { color: 'coral', content: oldDraft.content, hasContent: oldDraft.content.replace(/<[^>]*>/g, '').trim().length > 0 },
+    ],
+    activeTab: newActiveTab,
+  }
+}
+
+function migrateProject(p: Project): Project {
+  let result = p
+  if (result.tabs.length > 3) result = migrate5TabProject(result)
+  if (result.tabs[0].color === 'coral') result = migrateToCollectThinkWrite(result)
+  return result
 }
 
 function createDefaultProject(): Project {
   return {
     id: crypto.randomUUID(),
-    title: 'Welcome to Pensieve',
-    tabs: TAB_COLORS.map((color, i) => ({
+    title: 'Untitled',
+    tabs: TAB_COLORS.map((color) => ({
       color,
-      content: i === 0 ? DEFAULT_CONTENT : '',
-      hasContent: i === 0,
+      content: '',
+      hasContent: false,
     })),
     activeTab: 0,
     createdAt: Date.now(),

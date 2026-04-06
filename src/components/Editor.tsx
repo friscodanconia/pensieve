@@ -25,9 +25,9 @@ const ImageExtension = TiptapNode.create({
 import { useEffect, useCallback, useState, useRef } from 'react'
 
 const TAB_PLACEHOLDERS = [
-  'Start writing. Everything saves automatically.',
-  'Paste articles, quotes, or data here. Pensieve uses this to analyze your Draft.',
+  'Drop in articles, notes, quotes, images, or fragments. Everything saves automatically.',
   '',
+  'Start writing. Your material is in Collect. Your analysis is in Think.',
 ]
 
 interface EditorProps {

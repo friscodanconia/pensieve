@@ -33,7 +33,6 @@ export default function MirrorView({
   analysis, onAnalysis, status, onStatus, lastUpdated, onLastUpdated,
 }: MirrorViewProps) {
   const contentHashRef = useRef('')
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const runAnalysis = useCallback(async () => {
     if (!draftMarkdown.trim() && !sourcesMarkdown.trim()) {
@@ -85,24 +84,11 @@ export default function MirrorView({
     }
   }, [draftMarkdown, sourcesMarkdown, projectTitle, onAnalysis, onStatus, onLastUpdated])
 
-  // Only re-analyze when content actually changes, not on remount
+  // Track content hash for first-load detection (no auto-refresh — manual only)
   useEffect(() => {
     const hash = `${draftMarkdown}|||${sourcesMarkdown}`
-    if (hash === contentHashRef.current) return
     contentHashRef.current = hash
-
-    // If we already have analysis and content hasn't changed, skip
-    if (analysis && hash === contentHashRef.current) return
-
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      runAnalysis()
-    }, 5000)
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
-  }, [draftMarkdown, sourcesMarkdown, runAnalysis, analysis])
+  }, [draftMarkdown, sourcesMarkdown])
 
   // Run on first mount if no analysis exists yet
   useEffect(() => {
@@ -129,9 +115,10 @@ export default function MirrorView({
       }}>
         <div style={{ fontSize: '36px', opacity: 0.3 }}>&#9671;</div>
         <div style={{ fontSize: '14px', maxWidth: '340px', lineHeight: 1.7 }}>
-          Mirror reflects your writing back to you.
+          Nothing to analyze yet.
           <br />
-          Start writing in <strong style={{ color: 'var(--text-secondary)' }}>Draft</strong> and it will come alive.
+          Add some material in <strong style={{ color: 'var(--text-secondary)' }}>Collect</strong> first.
+          Think reads your material and finds the patterns you are not seeing.
         </div>
       </div>
     )
@@ -162,7 +149,7 @@ export default function MirrorView({
           ))}
         </div>
         <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          Reading your draft and sources
+          Reading your material and writing
         </div>
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           This takes a few seconds

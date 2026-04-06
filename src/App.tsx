@@ -47,7 +47,7 @@ export default function App() {
   const wordCount = countWords(currentContent)
   const currentMarkdown = htmlToMarkdown(currentContent)
 
-  // Build full context across Draft + Sources for the assistant (skip Mirror — it's AI-generated)
+  // Build full context across Collect + Write for the assistant (skip Think — it's AI-generated)
   const allTabsContext = project ? project.tabs
     .map((tab, i) => {
       if (i >= TAB_ROLES.length || !TAB_ROLES[i].editable) return null
@@ -60,9 +60,9 @@ export default function App() {
     .filter(Boolean)
     .join('\n\n') : ''
 
-  // Detect paste in Sources tab
+  // Detect paste in Collect tab
   useEffect(() => {
-    if (activeTab !== 1) return
+    if (activeTab !== 0) return
     const handlePaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData('text/plain') || ''
       if (text.length > 100) {
@@ -74,18 +74,18 @@ export default function App() {
     return () => document.removeEventListener('paste', handlePaste)
   }, [activeTab])
 
-  // Hide the process banner when switching away from Sources
+  // Hide the process banner when switching away from Collect
   useEffect(() => {
-    if (activeTab !== 1) {
+    if (activeTab !== 0) {
       setSourcesPendingProcess(false)
     }
   }, [activeTab])
 
-  // Process Sources content
+  // Process Collect content
   const handleProcessSources = useCallback(async () => {
     if (!project) return
-    const sourcesContent = htmlToMarkdown(project.tabs[1]?.content || '')
-    const draftContent = htmlToMarkdown(project.tabs[0]?.content || '')
+    const sourcesContent = htmlToMarkdown(project.tabs[0]?.content || '')
+    const draftContent = htmlToMarkdown(project.tabs[2]?.content || '')
     if (!sourcesContent.trim()) return
 
     setSourcesProcessing(true)
@@ -133,7 +133,7 @@ export default function App() {
         const p = { ...next[idx] }
         const tabs = [...p.tabs]
         const processedHtml = result.split('\n').map(line => `<p>${line || '<br>'}</p>`).join('')
-        tabs[1] = { ...tabs[1], content: processedHtml, hasContent: true }
+        tabs[0] = { ...tabs[0], content: processedHtml, hasContent: true }
         p.tabs = tabs
         p.updatedAt = Date.now()
         next[idx] = p
@@ -299,6 +299,23 @@ export default function App() {
           marginRight: assistantVisible ? '400px' : 'auto',
         }}
       >
+        {/* Brand */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '24px',
+        }}>
+          <h1 style={{
+            fontFamily: "'Lora', 'Georgia', serif",
+            fontSize: '32px',
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.5px',
+            margin: 0,
+          }}>
+            Pensieve
+          </h1>
+        </div>
+
         {/* Project Title + Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           {titleEditing ? (
@@ -504,8 +521,8 @@ export default function App() {
           />
         </div>
 
-        {/* Sources processing banner */}
-        {activeTab === 1 && (sourcesPendingProcess || sourcesProcessing) && (
+        {/* Collect processing banner */}
+        {activeTab === 0 && (sourcesPendingProcess || sourcesProcessing) && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -561,11 +578,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Editor or Mirror View */}
-        {activeTab === 2 ? (
+        {/* Editor or Think View */}
+        {activeTab === 1 ? (
           <MirrorView
-            draftMarkdown={htmlToMarkdown(project.tabs[0]?.content || '')}
-            sourcesMarkdown={htmlToMarkdown(project.tabs[1]?.content || '')}
+            draftMarkdown={htmlToMarkdown(project.tabs[2]?.content || '')}
+            sourcesMarkdown={htmlToMarkdown(project.tabs[0]?.content || '')}
             projectTitle={project.title}
             analysis={mirrorAnalysis}
             onAnalysis={setMirrorAnalysis}

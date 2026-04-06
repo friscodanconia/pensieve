@@ -10,25 +10,25 @@ export interface TabRole {
 
 export const TAB_ROLES: TabRole[] = [
   {
-    color: 'coral',
-    label: 'Draft',
-    icon: '✎',
-    tooltip: 'Your writing. This is where the words live.',
-    editable: true,
-  },
-  {
     color: 'amber',
-    label: 'Sources',
+    label: 'Collect',
     icon: '◈',
-    tooltip: 'Raw material — paste articles, quotes, links, data. Pensieve extracts what matters.',
+    tooltip: 'Gather your material — articles, notes, quotes, images, voice, fragments.',
     editable: true,
   },
   {
     color: 'sage',
-    label: 'Mirror',
+    label: 'Think',
     icon: '◇',
-    tooltip: 'A living analysis of your writing — structure, gaps, voice, unused sources. Updated automatically.',
+    tooltip: 'AI analysis of your material and writing.',
     editable: false,
+  },
+  {
+    color: 'coral',
+    label: 'Write',
+    icon: '✎',
+    tooltip: 'Your writing space.',
+    editable: true,
   },
 ]
 
@@ -48,7 +48,7 @@ export interface Project {
   mirrorContent?: string
 }
 
-export const TAB_COLORS: TabColor[] = ['coral', 'amber', 'sage']
+export const TAB_COLORS: TabColor[] = ['amber', 'sage', 'coral']
 
 export const TAB_CSS_COLORS: Record<TabColor, { solid: string; light: string }> = {
   coral: { solid: '#e8705a', light: '#e8705a40' },
