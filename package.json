@@ -7,7 +7,7 @@
     "dev": "vite",
     "server": "node server.js",
     "start": "node server.js & vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -30,6 +30,7 @@
     "dotenv": "^17.3.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "stripe": "^22.0.0",
     "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
