@@ -17,6 +17,7 @@ interface AssistantPanelProps {
   visible: boolean
   onToggle: () => void
   editorContent: string
+  projectId: string
   user: User | null
   subscriptionStatus: SubscriptionStatus
   credits: number | null
@@ -28,12 +29,17 @@ interface Message {
   content: string
 }
 
-export default function AssistantPanel({ visible, onToggle, editorContent, user, subscriptionStatus, credits, onSignIn }: AssistantPanelProps) {
+export default function AssistantPanel({ visible, onToggle, editorContent, projectId, user, subscriptionStatus, credits, onSignIn }: AssistantPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const tauri = isTauri()
+
+  useEffect(() => {
+    setMessages([])
+    setInput('')
+  }, [projectId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

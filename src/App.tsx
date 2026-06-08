@@ -634,6 +634,7 @@ export default function App() {
         visible={assistantVisible}
         onToggle={() => setAssistantVisible(!assistantVisible)}
         editorContent={allTabsContext}
+        projectId={activeProjectId}
         user={auth.user}
         subscriptionStatus={subscriptionStatus}
         credits={credits}
