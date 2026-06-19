@@ -34,6 +34,7 @@ export default function MirrorView({
 }: MirrorViewProps) {
   const contentHashRef = useRef('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const analysisGenRef = useRef(0)
 
   const runAnalysis = useCallback(async () => {
     if (!draftMarkdown.trim() && !sourcesMarkdown.trim()) {
@@ -42,6 +43,7 @@ export default function MirrorView({
       return
     }
 
+    const gen = ++analysisGenRef.current
     onStatus('analyzing')
 
     try {
@@ -77,10 +79,12 @@ export default function MirrorView({
         result = data.reply
       }
 
+      if (gen !== analysisGenRef.current) return
       onAnalysis(result)
       onStatus('done')
       onLastUpdated(new Date().toLocaleTimeString())
     } catch {
+      if (gen !== analysisGenRef.current) return
       onStatus('error')
     }
   }, [draftMarkdown, sourcesMarkdown, projectTitle, onAnalysis, onStatus, onLastUpdated])

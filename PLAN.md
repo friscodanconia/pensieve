@@ -6,6 +6,8 @@
 
 - [x] **Fix Mirror state not resetting on project switch**: `mirrorAnalysis`, `mirrorStatus`, and `mirrorLastUpdated` in `App.tsx` are global and never cleared when switching projects, so Mirror shows stale analysis from the previous project.
 
+- [x] **Fix Mirror analysis race condition**: If the user edits content while an analysis fetch is in-flight, the old (stale) result can resolve after a newer one and overwrite it. Add a generation counter (`analysisGenRef`) to `MirrorView.tsx` so only the most recently triggered analysis can update state.
+
 ## Done
 
 - [x] **Fix Mirror re-analysis bug**: Removed dead/buggy early-return on line 95 of `MirrorView.tsx` where `analysis && hash === contentHashRef.current` was always `true` (since `contentHashRef.current` was just set to `hash` on the previous line). This prevented Mirror from ever re-analyzing when content changed if any prior analysis existed. Also removed `analysis` from the `useEffect` dependency array since it was no longer used in that effect.
