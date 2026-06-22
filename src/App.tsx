@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import Editor from './components/Editor'
 import TabBar from './components/TabBar'
 import MirrorView from './components/MirrorView'
@@ -44,21 +44,28 @@ export default function App() {
   const project = projects[projectIndex] || projects[0]
   const activeTab = project?.activeTab || 0
   const currentContent = project?.tabs[activeTab]?.content || ''
-  const wordCount = countWords(currentContent)
-  const currentMarkdown = htmlToMarkdown(currentContent)
+  const tab0Content = project?.tabs[0]?.content ?? ''
+  const tab1Content = project?.tabs[1]?.content ?? ''
+
+  const wordCount = useMemo(() => countWords(currentContent), [currentContent])
+  const currentMarkdown = useMemo(() => htmlToMarkdown(currentContent), [currentContent])
+  const draftMarkdown = useMemo(() => htmlToMarkdown(tab0Content), [tab0Content])
+  const sourcesMarkdown = useMemo(() => htmlToMarkdown(tab1Content), [tab1Content])
 
   // Build full context across Draft + Sources for the assistant (skip Mirror — it's AI-generated)
-  const allTabsContext = project ? project.tabs
-    .map((tab, i) => {
-      if (i >= TAB_ROLES.length || !TAB_ROLES[i].editable) return null
-      const md = htmlToMarkdown(tab.content)
-      if (!md.trim()) return null
-      const label = TAB_ROLES[i].label
-      const isActive = i === activeTab
-      return `[${label}${isActive ? ' — CURRENTLY EDITING' : ''}]\n${md}\n[END ${label}]`
-    })
-    .filter(Boolean)
-    .join('\n\n') : ''
+  const allTabsContext = useMemo(() => {
+    if (!project) return ''
+    return TAB_ROLES
+      .map((role, i) => {
+        if (!role.editable) return null
+        const md = i === 0 ? draftMarkdown : sourcesMarkdown
+        if (!md.trim()) return null
+        const isActive = i === activeTab
+        return `[${role.label}${isActive ? ' — CURRENTLY EDITING' : ''}]\n${md}\n[END ${role.label}]`
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  }, [draftMarkdown, sourcesMarkdown, activeTab])
 
   // Detect paste in Sources tab
   useEffect(() => {
@@ -571,8 +578,8 @@ export default function App() {
         {/* Editor or Mirror View */}
         {activeTab === 2 ? (
           <MirrorView
-            draftMarkdown={htmlToMarkdown(project.tabs[0]?.content || '')}
-            sourcesMarkdown={htmlToMarkdown(project.tabs[1]?.content || '')}
+            draftMarkdown={draftMarkdown}
+            sourcesMarkdown={sourcesMarkdown}
             projectTitle={project.title}
             analysis={mirrorAnalysis}
             onAnalysis={setMirrorAnalysis}
