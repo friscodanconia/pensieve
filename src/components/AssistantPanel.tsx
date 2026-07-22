@@ -22,6 +22,7 @@ interface AssistantPanelProps {
   subscriptionStatus: SubscriptionStatus
   credits: number | null
   onSignIn: () => void
+  onCreditUpdate?: (response: Response) => void
 }
 
 interface Message {
@@ -29,7 +30,7 @@ interface Message {
   content: string
 }
 
-export default function AssistantPanel({ visible, onToggle, editorContent, projectId, user, subscriptionStatus, credits, onSignIn }: AssistantPanelProps) {
+export default function AssistantPanel({ visible, onToggle, editorContent, projectId, user, subscriptionStatus, credits, onSignIn, onCreditUpdate }: AssistantPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -82,6 +83,7 @@ export default function AssistantPanel({ visible, onToggle, editorContent, proje
           throw new Error(data.error || `API error: ${response.status}`)
         }
 
+        onCreditUpdate?.(response)
         const data = await response.json()
         reply = data.reply
       }

@@ -19,7 +19,7 @@ const isTauriApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in win
 export default function App() {
   const auth = useAuth()
   const subscriptionStatus = useSubscription(auth.user)
-  const { credits, displayCredits, hasCredits } = useCredits(auth.user)
+  const { credits, displayCredits, hasCredits, updateFromResponse } = useCredits(auth.user)
 
   const [projects, setProjects] = useState<Project[]>(() => loadProjects())
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
@@ -135,6 +135,7 @@ export default function App() {
           }),
         })
         if (!response.ok) throw new Error('API error')
+        updateFromResponse(response)
         const data = await response.json()
         result = data.reply
       }
@@ -587,6 +588,7 @@ export default function App() {
             onStatus={setMirrorStatus}
             lastUpdated={mirrorLastUpdated}
             onLastUpdated={setMirrorLastUpdated}
+            onCreditUpdate={updateFromResponse}
           />
         ) : (
           <Editor
@@ -646,6 +648,7 @@ export default function App() {
         subscriptionStatus={subscriptionStatus}
         credits={credits}
         onSignIn={() => setShowAuth(true)}
+        onCreditUpdate={updateFromResponse}
       />
 
       {/* Auth Modal — not needed in native app */}

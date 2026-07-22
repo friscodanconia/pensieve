@@ -19,6 +19,7 @@ interface MirrorViewProps {
   onStatus: (s: 'idle' | 'analyzing' | 'done' | 'error') => void
   lastUpdated: string | null
   onLastUpdated: (t: string | null) => void
+  onCreditUpdate?: (response: Response) => void
 }
 
 const pulseKeyframes = `
@@ -30,7 +31,7 @@ const pulseKeyframes = `
 
 export default function MirrorView({
   draftMarkdown, sourcesMarkdown, projectTitle,
-  analysis, onAnalysis, status, onStatus, lastUpdated, onLastUpdated,
+  analysis, onAnalysis, status, onStatus, lastUpdated, onLastUpdated, onCreditUpdate,
 }: MirrorViewProps) {
   const contentHashRef = useRef('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -75,6 +76,7 @@ export default function MirrorView({
           }),
         })
         if (!response.ok) throw new Error('API error')
+        onCreditUpdate?.(response)
         const data = await response.json()
         result = data.reply
       }
@@ -87,7 +89,7 @@ export default function MirrorView({
       if (gen !== analysisGenRef.current) return
       onStatus('error')
     }
-  }, [draftMarkdown, sourcesMarkdown, projectTitle, onAnalysis, onStatus, onLastUpdated])
+  }, [draftMarkdown, sourcesMarkdown, projectTitle, onAnalysis, onStatus, onLastUpdated, onCreditUpdate])
 
   // Only re-analyze when content actually changes, not on remount
   useEffect(() => {
