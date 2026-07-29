@@ -36,6 +36,7 @@ export default function MirrorView({
   const contentHashRef = useRef('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const analysisGenRef = useRef(0)
+  const prevAnalysisRef = useRef(analysis)
 
   const runAnalysis = useCallback(async () => {
     if (!draftMarkdown.trim() && !sourcesMarkdown.trim()) {
@@ -115,6 +116,20 @@ export default function MirrorView({
       runAnalysis()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Detect project switch: analysis cleared from non-empty → '' while content exists.
+  // The content-change effect would debounce 5 seconds; bypass it and run immediately.
+  useEffect(() => {
+    const wasNonEmpty = prevAnalysisRef.current !== ''
+    prevAnalysisRef.current = analysis
+
+    if (wasNonEmpty && analysis === '' && status === 'idle' && (draftMarkdown.trim() || sourcesMarkdown.trim())) {
+      const hash = `${draftMarkdown}|||${sourcesMarkdown}`
+      contentHashRef.current = hash
+      if (timerRef.current) clearTimeout(timerRef.current)
+      runAnalysis()
+    }
+  }, [analysis, status, draftMarkdown, sourcesMarkdown, runAnalysis])
 
   // Empty state
   if (!draftMarkdown.trim() && !sourcesMarkdown.trim()) {

@@ -2,6 +2,8 @@
 
 ## High Priority
 
+- [x] **Fix Mirror blank state when switching projects while on the Mirror tab**: When the user is on the Mirror tab and switches projects, `App.tsx` resets `mirrorAnalysis → ''` and `mirrorStatus → 'idle'`. MirrorView is still mounted (its first-mount effect won't re-run), so the content-change effect's 5-second debounce is all that fires — leaving Mirror showing just a bare "Refresh" button with no content or spinner for 5 seconds. Fix: add a `useEffect` in `MirrorView.tsx` that detects when the `analysis` prop transitions from non-empty to `''` (the project-switch signal) while content exists, and immediately triggers `runAnalysis()` — bypassing the debounce.
+
 - [x] **Wire up credit counter to update in real-time after API usage**: `updateFromResponse` in `useCredits.ts` reads the `X-Credits-Remaining` header that all three API endpoints set after decrementing credits — but it was never called. The displayed credit count never decremented in real-time after using the assistant, Mirror analysis, or Sources extraction. Added `onCreditUpdate` prop to `AssistantPanel` and `MirrorView`, and called `updateFromResponse` directly in `handleProcessSources` in `App.tsx`.
 
 - [x] **Memoize expensive htmlToMarkdown/countWords calls in App.tsx**: `htmlToMarkdown` and `countWords` both create DOM elements and run per-render — meaning they fire on every keystroke. Wrap `wordCount`, `currentMarkdown`, `draftMarkdown`, `sourcesMarkdown`, and `allTabsContext` in `useMemo` with their actual string dependencies so they only recompute when content changes.
