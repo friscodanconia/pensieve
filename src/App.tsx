@@ -47,7 +47,7 @@ export default function App() {
   const tab0Content = project?.tabs[0]?.content ?? ''
   const tab1Content = project?.tabs[1]?.content ?? ''
 
-  const wordCount = useMemo(() => countWords(currentContent), [currentContent])
+  const wordCount = useMemo(() => countWords(activeTab === 2 ? tab0Content : currentContent), [activeTab, tab0Content, currentContent])
   const currentMarkdown = useMemo(() => htmlToMarkdown(currentContent), [currentContent])
   const draftMarkdown = useMemo(() => htmlToMarkdown(tab0Content), [tab0Content])
   const sourcesMarkdown = useMemo(() => htmlToMarkdown(tab1Content), [tab1Content])
