@@ -2,6 +2,8 @@
 
 ## High Priority
 
+- [x] **Fix Mirror re-analysis triggered on every tab visit**: `contentHashRef` is initialized to `''` in `MirrorView.tsx`, so whenever the component remounts (user navigates back to the Mirror tab), the content-change effect sees `hash !== ''` and schedules a 5-second re-analysis even if nothing changed since the last analysis — consuming a credit each visit. Fix: initialize `contentHashRef` with the actual current content hash instead of `''`.
+
 - [x] **Fix word count showing 0 on Mirror tab**: When the user is on the Mirror tab, `currentContent` is `project.tabs[2].content` which is always `''` (Mirror has no stored content — it's an AI-generated view). So the status bar shows "0 words" with no "min read" estimate on the Mirror tab. Since Mirror reflects the Draft, the status bar should show the Draft word count when on Mirror tab. Fix: change the `wordCount` memo in `App.tsx` to use `tab0Content` instead of `currentContent` when `activeTab === 2`.
 
 - [x] **Fix Mirror blank state when switching projects while on the Mirror tab**: When the user is on the Mirror tab and switches projects, `App.tsx` resets `mirrorAnalysis → ''` and `mirrorStatus → 'idle'`. MirrorView is still mounted (its first-mount effect won't re-run), so the content-change effect's 5-second debounce is all that fires — leaving Mirror showing just a bare "Refresh" button with no content or spinner for 5 seconds. Fix: add a `useEffect` in `MirrorView.tsx` that detects when the `analysis` prop transitions from non-empty to `''` (the project-switch signal) while content exists, and immediately triggers `runAnalysis()` — bypassing the debounce.

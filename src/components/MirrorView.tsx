@@ -33,7 +33,7 @@ export default function MirrorView({
   draftMarkdown, sourcesMarkdown, projectTitle,
   analysis, onAnalysis, status, onStatus, lastUpdated, onLastUpdated, onCreditUpdate,
 }: MirrorViewProps) {
-  const contentHashRef = useRef('')
+  const contentHashRef = useRef(`${draftMarkdown}|||${sourcesMarkdown}`)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const analysisGenRef = useRef(0)
   const prevAnalysisRef = useRef(analysis)
