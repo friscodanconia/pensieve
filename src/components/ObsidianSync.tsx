@@ -26,31 +26,19 @@ async function tauriInvoke(cmd: string, args: Record<string, unknown>): Promise<
 
 export default function ObsidianSync({ projectTitle, markdown, tabIndex, tabColor, userEmail }: ObsidianSyncProps) {
   const tauri = isTauri()
-
-  // In Tauri, it's always the owner's machine — skip email gate
-  // On web, only show for the owner
-  if (!tauri && OWNER_EMAIL && userEmail !== OWNER_EMAIL) return null
+  // Compute visibility before hooks but use it as a guard inside effects
+  const shouldShow = tauri || !OWNER_EMAIL || userEmail === OWNER_EMAIL
 
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [vaultExists, setVaultExists] = useState(true)
 
-  // Check if vault exists on first render (Tauri only)
-  useEffect(() => {
-    if (tauri) {
-      tauriInvoke('get_vault_path', {}).then((path) => {
-        // If we got a path, check if saving works by looking at the result
-        // The vault check happens server-side in save_to_vault
-        if (path) setVaultExists(true)
-      }).catch(() => setVaultExists(false))
-    }
-  }, [tauri])
-
   // Track the latest values for beforeunload flush
   const latestRef = useRef({ projectTitle, markdown, tabIndex, tabColor })
   const pendingRef = useRef(false)
   const lastSavedContentRef = useRef('')
+  const prevTabRef = useRef(tabIndex)
 
   useEffect(() => {
     latestRef.current = { projectTitle, markdown, tabIndex, tabColor }
@@ -127,9 +115,17 @@ source: pensieve
     }
   }, [buildPayload])
 
+  // Check if vault exists on first render (Tauri only)
+  useEffect(() => {
+    if (!shouldShow || !tauri) return
+    tauriInvoke('get_vault_path', {}).then((path) => {
+      if (path) setVaultExists(true)
+    }).catch(() => setVaultExists(false))
+  }, [shouldShow, tauri])
+
   // Auto-save on content change with debounce
   useEffect(() => {
-    if (!markdown.trim()) return
+    if (!shouldShow || !markdown.trim()) return
     // Skip if content hasn't actually changed since last save
     if (markdown === lastSavedContentRef.current) return
 
@@ -139,11 +135,11 @@ source: pensieve
     }, 2000)
 
     return () => clearTimeout(timer)
-  }, [markdown, projectTitle, tabIndex, saveToCloud])
+  }, [shouldShow, markdown, projectTitle, tabIndex, saveToCloud])
 
   // Flush unsaved content on tab switch (immediate save, no debounce)
-  const prevTabRef = useRef(tabIndex)
   useEffect(() => {
+    if (!shouldShow) return
     if (prevTabRef.current !== tabIndex) {
       // Save the previous tab's content immediately
       if (pendingRef.current && lastSavedContentRef.current !== latestRef.current.markdown) {
@@ -151,10 +147,11 @@ source: pensieve
       }
       prevTabRef.current = tabIndex
     }
-  }, [tabIndex, saveToCloud])
+  }, [shouldShow, tabIndex, saveToCloud])
 
   // Flush on page close / navigate away
   useEffect(() => {
+    if (!shouldShow) return
     const handleBeforeUnload = () => {
       if (!pendingRef.current) return
       const { projectTitle: title, markdown: md, tabIndex: idx, tabColor: color } = latestRef.current
@@ -186,7 +183,11 @@ source: pensieve
       window.removeEventListener('beforeunload', handleBeforeUnload)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [buildPayload, saveToCloud])
+  }, [shouldShow, buildPayload, saveToCloud])
+
+  // In Tauri, it's always the owner's machine — skip email gate
+  // On web, only show for the owner
+  if (!shouldShow) return null
 
   // Hide sync UI entirely if no vault found
   if (tauri && !vaultExists) return null

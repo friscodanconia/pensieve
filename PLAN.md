@@ -18,6 +18,8 @@
 
 - [x] **Fix Mirror analysis race condition**: If the user edits content while an analysis fetch is in-flight, the old (stale) result can resolve after a newer one and overwrite it. Add a generation counter (`analysisGenRef`) to `MirrorView.tsx` so only the most recently triggered analysis can update state.
 
+- [x] **Fix React Rules of Hooks violation in ObsidianSync**: `ObsidianSync.tsx` had an early return at line 32 (`if (!tauri && OWNER_EMAIL && userEmail !== OWNER_EMAIL) return null`) before calling all `useState`, `useRef`, `useCallback`, and `useEffect` hooks. If `userEmail` changed (user logging in or out), React would throw "Rendered more hooks than during the previous render." Fix: moved all hooks before the early return, replaced it with a `shouldShow` boolean, and added `shouldShow` as a guard inside each side-effect hook.
+
 ## Done
 
 - [x] **Fix Mirror re-analysis bug**: Removed dead/buggy early-return on line 95 of `MirrorView.tsx` where `analysis && hash === contentHashRef.current` was always `true` (since `contentHashRef.current` was just set to `hash` on the previous line). This prevented Mirror from ever re-analyzing when content changed if any prior analysis existed. Also removed `analysis` from the `useEffect` dependency array since it was no longer used in that effect.
